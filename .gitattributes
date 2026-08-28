@@ -1,2 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+APP[[:space:]]Class/W5/W5/Assets/材质/metal2/Metal058C_8K-JPG_Color.jpg filter=lfs diff=lfs merge=lfs -text
+APP[[:space:]]Class/W5/W5/Assets/材质/metal2/Metal058C_8K-JPG_NormalDX.jpg filter=lfs diff=lfs merge=lfs -text
