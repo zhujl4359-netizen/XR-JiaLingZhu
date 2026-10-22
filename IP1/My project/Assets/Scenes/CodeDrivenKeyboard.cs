@@ -1,6 +1,9 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>
+/// 使用 Unity 的即时模式 GUI 绘制桌面虚拟键盘；按住 T 时显示。
+/// </summary>
 public class CodeDrivenKeyboard : MonoBehaviour
 {
     [Header("UI 颜色设置 (实时生效)")]
@@ -33,6 +36,9 @@ public class CodeDrivenKeyboard : MonoBehaviour
         new string[] { "Ctrl", "Win", "Alt", "Space", "Alt ", "Win ", "Ctrl " }
     };
 
+    /// <summary>
+    /// 读取 T 键是否按住，决定本帧是否显示虚拟键盘。
+    /// </summary>
     void Update()
     {
         if (Keyboard.current != null)
@@ -41,6 +47,9 @@ public class CodeDrivenKeyboard : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 仅在按住 T 时绘制面板；颜色变化时才重建 GUI 样式。
+    /// </summary>
     void OnGUI()
     {
         if (!isTHeld) return;
@@ -65,6 +74,9 @@ public class CodeDrivenKeyboard : MonoBehaviour
         DrawAuthenticKeyboard(panelX, panelY, panelWidth);
     }
 
+    /// <summary>
+    /// 销毁旧颜色贴图并生成新的面板、按键样式，避免重复分配累积。
+    /// </summary>
     private void InitStyles()
     {
         // 清理旧贴图防内存泄漏
@@ -97,6 +109,9 @@ public class CodeDrivenKeyboard : MonoBehaviour
         };
     }
 
+    /// <summary>
+    /// 按预设的五排布局绘制键位，点击时将键名输出到日志。
+    /// </summary>
     private void DrawAuthenticKeyboard(float startX, float startY, float width)
     {
         float spacing = 4f;          // 按键之间的缝隙
@@ -131,6 +146,9 @@ public class CodeDrivenKeyboard : MonoBehaviour
     }
 
     // 获取实体键盘真实比例的按键宽度
+    /// <summary>
+    /// 给空格、回车等特殊键分配更宽的绘制尺寸。
+    /// </summary>
     private float GetAuthenticKeyWidth(string key, float baseWidth)
     {
         switch (key.Trim())

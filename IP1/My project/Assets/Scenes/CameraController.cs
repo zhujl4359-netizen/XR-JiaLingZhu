@@ -1,6 +1,9 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>
+/// 桌面版视角控制：按 1/3 切换第一、第三人称，并平滑跟随角色。
+/// </summary>
 public class CameraController : MonoBehaviour
 {
     [Header("绑定目标")]
@@ -27,7 +30,16 @@ public class CameraController : MonoBehaviour
 
     private float cameraYaw;
     private float cameraPitch;
+    private Vector3 cameraVelocity;
 
+    [Header("Camera comfort")]
+    [Min(0.01f)] public float followSmoothTime = 0.22f;
+    [Min(0.01f)] public float rotationSmoothSpeed = 8f;
+
+
+    /// <summary>
+    /// 以 Inspector 指定的初始角度设置镜头，并默认进入第三人称。
+    /// </summary>
     void Start()
     {
         cameraYaw = initialYaw;
@@ -36,6 +48,9 @@ public class CameraController : MonoBehaviour
         SetThirdPerson();
     }
 
+    /// <summary>
+    /// 监听数字 1、3 和 Esc，分别切换视角或释放鼠标。
+    /// </summary>
     void Update()
     {
         if (Keyboard.current == null) return;
@@ -54,11 +69,6 @@ public class CameraController : MonoBehaviour
             SetThirdPerson();
         }
 
-        // 第三人称时允许鼠标控制摄像机
-        if (isThirdPerson)
-        {
-            UpdateThirdPersonCamera();
-        }
 
         // ESC：释放鼠标
         if (Keyboard.current.escapeKey.wasPressedThisFrame)
@@ -68,13 +78,24 @@ public class CameraController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 角色位置更新之后再移动第三人称镜头，减少跟随抖动。
+    /// </summary>
+    void LateUpdate()
+    {
+        if (isThirdPerson) UpdateThirdPersonCamera();
+    }
+
+    /// <summary>
+    /// 读取鼠标角度，限制俯仰并平滑计算镜头位置和朝向。
+    /// </summary>
     void UpdateThirdPersonCamera()
     {
         if (cameraTransform == null || c1HeadTransform == null)
             return;
 
         // 鼠标移动
-        if (Mouse.current != null)
+        if (Mouse.current != null && Cursor.lockState == CursorLockMode.Locked)
         {
             Vector2 mouseDelta = Mouse.current.delta.ReadValue();
 
@@ -100,12 +121,17 @@ public class CameraController : MonoBehaviour
         Vector3 cameraPosition =
             targetPosition - rotation * Vector3.forward * cameraDistance;
 
-        cameraTransform.position = cameraPosition;
+        cameraTransform.position = Vector3.SmoothDamp(cameraTransform.position, cameraPosition,
+            ref cameraVelocity, followSmoothTime);
 
-        // 摄像机始终看向 C1
-        cameraTransform.LookAt(targetPosition);
+        Quaternion lookRotation = Quaternion.LookRotation(targetPosition - cameraTransform.position);
+        cameraTransform.rotation = Quaternion.Slerp(cameraTransform.rotation, lookRotation,
+            1f - Mathf.Exp(-rotationSmoothSpeed * Time.deltaTime));
     }
 
+    /// <summary>
+    /// 把镜头挂到角色头部，应用局部偏移并显示第一人称手部模型。
+    /// </summary>
     public void SetFirstPerson()
     {
         isThirdPerson = false;
@@ -129,6 +155,9 @@ public class CameraController : MonoBehaviour
             rightHandVisual.SetActive(true);
     }
 
+    /// <summary>
+    /// 镜头脱离角色层级，锁定鼠标并隐藏第一人称手部模型。
+    /// </summary>
     public void SetThirdPerson()
     {
         isThirdPerson = true;
@@ -143,10 +172,7 @@ public class CameraController : MonoBehaviour
             cameraTransform.SetParent(null);
         }
 
-        // 第三人称初始角度
-        cameraYaw = initialYaw;
-        cameraPitch = initialPitch;
-
+        cameraVelocity = Vector3.zero;
         UpdateThirdPersonCamera();
 
         if (leftHandVisual != null)

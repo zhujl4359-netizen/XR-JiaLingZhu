@@ -1,6 +1,9 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>
+/// 鹿头物品的靠近高亮、E 键拾取和投掷后物理状态恢复。
+/// </summary>
 public class MaskInteraction : MonoBehaviour
 {
     [Header("玩家")]
@@ -28,6 +31,9 @@ public class MaskInteraction : MonoBehaviour
         get { return isPickedUp; }
     }
 
+    /// <summary>
+    /// 获取渲染器与刚体，并设置鹿头的普通材质。
+    /// </summary>
     void Start()
     {
         maskRenderer = GetComponent<Renderer>();
@@ -39,6 +45,9 @@ public class MaskInteraction : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 计算玩家与鹿头的距离：靠近时高亮并允许按 E 拾取，离开后恢复材质。
+    /// </summary>
     void Update()
     {
         if (player == null)
@@ -82,6 +91,9 @@ public class MaskInteraction : MonoBehaviour
     // 拾取
     // =====================================
 
+    /// <summary>
+    /// 冻结鹿头刚体并挂到手持点，使物品跟随角色。
+    /// </summary>
     void PickUp()
     {
         isPickedUp = true;
@@ -108,6 +120,9 @@ public class MaskInteraction : MonoBehaviour
     // 被投掷后调用
     // =====================================
 
+    /// <summary>
+    /// 投掷脚本调用后解除手持状态，重新开启刚体和重力。
+    /// </summary>
     public void OnThrown()
     {
         isPickedUp = false;

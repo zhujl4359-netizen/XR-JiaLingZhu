@@ -2,6 +2,9 @@ using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.InputSystem;
 
+/// <summary>
+/// 桌面版先祖兑换树：管理节点解锁、鼠标长按兑换、物品拿取/装备/投掷及界面反馈。
+/// </summary>
 public class AncestorExchangeTree : MonoBehaviour
 {
     // =====================================================
@@ -69,6 +72,24 @@ public class AncestorExchangeTree : MonoBehaviour
 
     private bool keyboardOpen = false;
 
+    [Header("Guidance and feedback")]
+    public float approachPromptDistance = 24f;
+    public float feedbackDuration = 4f;
+    public float collectionAnimationDuration = 0.65f;
+    public Color promptColor = new Color(1f, 0.9f, 0.55f, 1f);
+
+    private CursorLockMode cursorLockBeforeTree;
+    private bool cursorVisibleBeforeTree;
+    private string feedbackMessage;
+    private float feedbackUntil;
+    private float collectionAnimationStart = -1f;
+    private Vector2 collectionAnimationOrigin;
+    private string collectionAnimationIcon;
+    private AudioSource feedbackAudio;
+    private AudioClip feedbackClip;
+    private string lastEquippedItemName;
+
+
 
     // =====================================================
     // TREE STATE
@@ -106,6 +127,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // =====================================================
 
     [System.Serializable]
+    /// <summary>
+    /// 记录兑换节点的名称、图标、价格、前置节点与领取状态。
+    /// </summary>
     public class ItemNode
     {
         public string itemName;
@@ -193,6 +217,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // START
     // =====================================================
 
+    /// <summary>
+    /// 初始化玩家、摄像机与手持点引用；创建节点数据和反馈音效，隐藏模板及键盘。
+    /// </summary>
     void Start()
     {
         // -------------------------------------------------
@@ -277,6 +304,11 @@ public class AncestorExchangeTree : MonoBehaviour
         // -------------------------------------------------
 
         CreateItemTree();
+        feedbackAudio = GetComponent<AudioSource>();
+        if (feedbackAudio == null) feedbackAudio = gameObject.AddComponent<AudioSource>();
+        feedbackAudio.playOnAwake = false;
+        feedbackAudio.spatialBlend = 0f;
+        feedbackClip = CreateConfirmationChime();
 
 
         // -------------------------------------------------
@@ -301,6 +333,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // HIDE MODEL TEMPLATES
     // =====================================================
 
+    /// <summary>
+    /// 隐藏仅供实例化的模型模板，避免模板物体本身出现在场景中。
+    /// </summary>
     void HideModelTemplates()
     {
         if (capeModel != null)
@@ -324,6 +359,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // CREATE TREE
     // =====================================================
 
+    /// <summary>
+    /// 构造兑换树的节点、价格、父子关系和界面坐标；首次可兑换节点在此设定。
+    /// </summary>
     void CreateItemTree()
     {
         items.Clear();
@@ -435,6 +473,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // UPDATE
     // =====================================================
 
+    /// <summary>
+    /// 每帧处理 E、Esc、Q、T 输入，并检查鼠标长按兑换与松开状态。
+    /// </summary>
     void Update()
     {
         if (Keyboard.current == null)
@@ -500,13 +541,16 @@ public class AncestorExchangeTree : MonoBehaviour
     // E KEY
     // =====================================================
 
+    /// <summary>
+    /// 按优先级处理 E：手中有物品则装备；否则关闭已打开的树或在范围内打开树。
+    /// </summary>
     void HandleEKey()
     {
         // -------------------------------------------------
         // If tree is open -> close
         // -------------------------------------------------
 
-        if (treeOpen)
+        if (treeOpen && currentHeldObject == null)
         {
             CloseTree();
             return;
@@ -550,6 +594,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // ESC
     // =====================================================
 
+    /// <summary>
+    /// Esc 优先关闭虚拟键盘；没有键盘时关闭兑换树。
+    /// </summary>
     void HandleEscape()
     {
         // Close keyboard first
@@ -574,6 +621,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // OPEN TREE
     // =====================================================
 
+    /// <summary>
+    /// 重置节点交互状态，保存原鼠标状态并显示可点击的兑换树。
+    /// </summary>
     void OpenTree()
     {
         treeOpen = true;
@@ -586,10 +636,11 @@ public class AncestorExchangeTree : MonoBehaviour
 
         pressingNode = -1;
 
+        cursorLockBeforeTree = Cursor.lockState;
+        cursorVisibleBeforeTree = Cursor.visible;
         Cursor.visible = true;
-
-        Cursor.lockState =
-            CursorLockMode.None;
+        Cursor.lockState = CursorLockMode.None;
+        SetFeedback("Select an item, then hold the left mouse button to obtain it.", 5f);
 
         Debug.Log(
             "Ancestor Tree Opened"
@@ -601,6 +652,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // CLOSE TREE
     // =====================================================
 
+    /// <summary>
+    /// 关闭兑换树并恢复打开前的鼠标锁定和可见状态。
+    /// </summary>
     void CloseTree()
     {
         treeOpen = false;
@@ -613,10 +667,8 @@ public class AncestorExchangeTree : MonoBehaviour
 
         pressingNode = -1;
 
-        Cursor.visible = true;
-
-        Cursor.lockState =
-            CursorLockMode.None;
+        Cursor.lockState = cursorLockBeforeTree;
+        Cursor.visible = cursorVisibleBeforeTree;
 
         Debug.Log(
             "Ancestor Tree Closed"
@@ -628,6 +680,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // LONG PRESS START
     // =====================================================
 
+    /// <summary>
+    /// 仅对已解锁、未取出且当前可持有的节点开始计时，防止重复兑换。
+    /// </summary>
     void StartLongPress(int index)
     {
         if (index < 0 ||
@@ -655,7 +710,7 @@ public class AncestorExchangeTree : MonoBehaviour
             Time.realtimeSinceStartup;
 
         selectedNode = index;
-
+        SetFeedback(items[index].itemName + " selected - keep holding to obtain.", 2f);
 
         Debug.Log(
             "Started holding: " +
@@ -668,6 +723,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // CHECK LONG PRESS
     // =====================================================
 
+    /// <summary>
+    /// 鼠标持续按住达到设定时间后兑换选中节点；提前松开则取消。
+    /// </summary>
     void CheckLongPress()
     {
         if (!treeOpen)
@@ -691,6 +749,13 @@ public class AncestorExchangeTree : MonoBehaviour
             pressStartTime;
 
 
+        if (Mouse.current == null || !Mouse.current.leftButton.isPressed)
+        {
+            isPressing = false;
+            pressingNode = -1;
+            return;
+        }
+
         if (heldTime >= longPressTime)
         {
             int index =
@@ -711,6 +776,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // CHECK MOUSE RELEASE
     // =====================================================
 
+    /// <summary>
+    /// 鼠标提前松开时清理长按状态，避免下一次点击沿用旧计时。
+    /// </summary>
     void CheckMouseRelease()
     {
         if (!isPressing)
@@ -737,11 +805,18 @@ public class AncestorExchangeTree : MonoBehaviour
     // GUI
     // =====================================================
 
+    /// <summary>
+    /// 按照树是否打开，绘制引导提示或兑换树主体、节点、反馈及收集动画。
+    /// </summary>
     void OnGUI()
     {
         if (!treeOpen)
+        {
+            DrawApproachPrompt();
+            DrawItemStatusBadge();
+            DrawFeedback();
             return;
-
+        }
 
         DrawBackground();
 
@@ -754,6 +829,9 @@ public class AncestorExchangeTree : MonoBehaviour
         DrawSelectedItem();
 
         DrawInstruction();
+        DrawCollectionAnimation();
+        DrawItemStatusBadge();
+        DrawFeedback();
     }
 
 
@@ -761,6 +839,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // BACKGROUND
     // =====================================================
 
+    /// <summary>
+    /// 绘制覆盖游戏画面的半透明兑换树背景。
+    /// </summary>
     void DrawBackground()
     {
         GUI.color =
@@ -787,6 +868,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // TITLE
     // =====================================================
 
+    /// <summary>
+    /// 在兑换树顶部绘制标题和货币等说明。
+    /// </summary>
     void DrawTitle()
     {
         GUIStyle title =
@@ -821,6 +905,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // CONNECTIONS
     // =====================================================
 
+    /// <summary>
+    /// 根据节点父子关系在界面上绘制连接线。
+    /// </summary>
     void DrawConnections()
     {
         for (
@@ -863,6 +950,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // NODES
     // =====================================================
 
+    /// <summary>
+    /// 遍历所有兑换节点，并为每个节点调用单独的绘制逻辑。
+    /// </summary>
     void DrawNodes()
     {
         hoveredNode = -1;
@@ -886,6 +976,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // SINGLE NODE
     // =====================================================
 
+    /// <summary>
+    /// 绘制单个节点，处理悬停、选中、锁定、价格和鼠标点击反馈。
+    /// </summary>
     void DrawNode(
         int index,
         ItemNode item)
@@ -1150,6 +1243,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // EXTRACTED NODE
     // =====================================================
 
+    /// <summary>
+    /// 为已经取出的节点绘制不可再次领取的视觉状态。
+    /// </summary>
     void DrawExtractedNode(
         Rect rect,
         Vector2 center,
@@ -1229,6 +1325,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // SELECTED ITEM
     // =====================================================
 
+    /// <summary>
+    /// 显示当前选中物品的名称、说明或兑换状态。
+    /// </summary>
     void DrawSelectedItem()
     {
         if (selectedNode < 0)
@@ -1298,7 +1397,7 @@ public class AncestorExchangeTree : MonoBehaviour
         if (item.extracted)
         {
             status =
-                "EXTRACTED";
+                currentHeldItemIndex == selectedNode ? "OBTAINED - IN HAND" : "OBTAINED";
         }
         else if (item.unlocked)
         {
@@ -1357,6 +1456,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // INSTRUCTION
     // =====================================================
 
+    /// <summary>
+    /// 根据当前交互状态显示底部操作提示。
+    /// </summary>
     void DrawInstruction()
     {
         GUIStyle style =
@@ -1382,7 +1484,7 @@ public class AncestorExchangeTree : MonoBehaviour
         else
         {
             text =
-                "Hold an unlocked item to extract it     ESC: Close";
+                "Click and hold an unlocked item to obtain it     ESC: Close";
         }
 
 
@@ -1403,6 +1505,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // UNLOCK
     // =====================================================
 
+    /// <summary>
+    /// 把指定节点标记为已解锁，使其可参与后续兑换。
+    /// </summary>
     void UnlockItem(int index)
     {
         if (
@@ -1435,6 +1540,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // EXTRACT ITEM
     // =====================================================
 
+    /// <summary>
+    /// 从模板生成物品实例，放到摄像机前的手持点，关闭物理并记录领取状态。
+    /// </summary>
     void ExtractItem(int index)
     {
         if (
@@ -1573,12 +1681,13 @@ public class AncestorExchangeTree : MonoBehaviour
         // MARK EXTRACTED
         // =================================================
 
-        items[index].extracted =
-            true;
-
-
-        selectedNode =
-            index;
+        items[index].extracted = true;
+        selectedNode = index;
+        collectionAnimationOrigin = GetScreenPosition(item.position);
+        collectionAnimationIcon = item.icon;
+        collectionAnimationStart = Time.realtimeSinceStartup;
+        SetFeedback(item.itemName + " Obtained - now in your hand. Press E to equip.", feedbackDuration);
+        PlayConfirmationChime();
 
 
         Debug.Log(
@@ -1609,6 +1718,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // GET MODEL
     // =====================================================
 
+    /// <summary>
+    /// 将兑换节点名称映射到 Inspector 中绑定的模型模板。
+    /// </summary>
     GameObject GetModelTemplate(
         string itemName)
     {
@@ -1639,6 +1751,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // DISABLE PHYSICS
     // =====================================================
 
+    /// <summary>
+    /// 手持或装备物品时关闭刚体运动及碰撞，避免物体与角色相互推挤。
+    /// </summary>
     void DisablePhysics(
         GameObject obj)
     {
@@ -1689,6 +1804,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // ENABLE PHYSICS
     // =====================================================
 
+    /// <summary>
+    /// 投出物品前恢复刚体和碰撞，使其重新受重力影响。
+    /// </summary>
     void EnablePhysics(
         GameObject obj)
     {
@@ -1732,6 +1850,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // EQUIP
     // =====================================================
 
+    /// <summary>
+    /// 把当前手持物从镜头前移到角色装备点，随后清空手持槽。
+    /// </summary>
     void EquipCurrentItem()
     {
         if (currentHeldObject == null)
@@ -1802,6 +1923,10 @@ public class AncestorExchangeTree : MonoBehaviour
         }
 
 
+        lastEquippedItemName = itemName;
+        SetFeedback(itemName + " Equipped", feedbackDuration);
+        PlayConfirmationChime();
+
         Debug.Log(
             "Equipped item: " +
             itemName
@@ -1821,6 +1946,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // EQUIPMENT POINT
     // =====================================================
 
+    /// <summary>
+    /// 按物品名称寻找角色上的专用挂点；鹿头优先使用 MaskHoldPoint。
+    /// </summary>
     Transform FindEquipmentPoint(
         string itemName)
     {
@@ -1870,6 +1998,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // FIND CHILD
     // =====================================================
 
+    /// <summary>
+    /// 在指定父物体的全部子层级中按名称查找挂点，包括未激活物体。
+    /// </summary>
     Transform FindDeepChild(
         Transform parent,
         string childName)
@@ -1903,6 +2034,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // THROW
     // =====================================================
 
+    /// <summary>
+    /// 从摄像机手持点解除物品，恢复物理并沿视线方向施加投掷冲量。
+    /// </summary>
     void ThrowCurrentItem()
     {
         if (currentHeldObject == null)
@@ -1980,6 +2114,8 @@ public class AncestorExchangeTree : MonoBehaviour
         }
 
 
+        items[currentHeldItemIndex].extracted = false;
+        SetFeedback(items[currentHeldItemIndex].itemName + " thrown - obtain it again from the tree.", feedbackDuration);
         Debug.Log(
             "Thrown item."
         );
@@ -1998,6 +2134,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // VIRTUAL KEYBOARD
     // =====================================================
 
+    /// <summary>
+    /// 切换虚拟键盘的显示状态，并同步内部开关标记。
+    /// </summary>
     void ToggleVirtualKeyboard()
     {
         keyboardOpen =
@@ -2023,10 +2162,138 @@ public class AncestorExchangeTree : MonoBehaviour
     }
 
 
+    /// <summary>
+    /// 暂存提示文字及过期时间，供后续界面绘制。
+    /// </summary>
+    private void SetFeedback(string message, float duration)
+    {
+        feedbackMessage = message;
+        feedbackUntil = Time.realtimeSinceStartup + duration;
+    }
+
+    /// <summary>
+    /// 玩家接近先祖但尚未打开兑换树时显示交互引导。
+    /// </summary>
+    private void DrawApproachPrompt()
+    {
+        if (player == null || currentHeldObject != null) return;
+        float distance = Vector3.Distance(player.position, transform.position);
+        if (distance > approachPromptDistance) return;
+
+        bool canOpen = distance <= interactionDistance;
+        string message = canOpen
+            ? "ANCESTOR  •  Press E to open the item tree"
+            : "ANCESTOR  •  Move closer to explore items";
+        GUIStyle style = new GUIStyle(GUI.skin.box);
+        style.fontSize = 18;
+        style.fontStyle = FontStyle.Bold;
+        style.alignment = TextAnchor.MiddleCenter;
+        style.normal.textColor = promptColor;
+        GUI.Box(new Rect(Screen.width / 2f - 230f, Screen.height - 150f, 460f, 48f), message, style);
+
+        Camera cam = Camera.main;
+        if (cam == null) return;
+        Vector3 point = cam.WorldToScreenPoint(transform.position + Vector3.up * 2.5f);
+        if (point.z <= 0f) return;
+        float x = Mathf.Clamp(point.x, 30f, Screen.width - 30f);
+        float y = Mathf.Clamp(Screen.height - point.y, 30f, Screen.height - 180f);
+        GUI.color = canOpen ? promptColor : Color.white;
+        GUI.Label(new Rect(x - 50f, y - 25f, 100f, 50f), "✦ ANCESTOR", style);
+        GUI.color = Color.white;
+    }
+
+    /// <summary>
+    /// 在界面上显示当前持有或装备的物品状态。
+    /// </summary>
+    private void DrawItemStatusBadge()
+    {
+        string status = currentHeldObject != null && currentHeldItemIndex >= 0
+            ? items[currentHeldItemIndex].itemName + "  •  IN HAND  •  E to equip"
+            : string.IsNullOrEmpty(lastEquippedItemName)
+                ? null : lastEquippedItemName + "  •  EQUIPPED";
+        if (status == null) return;
+        GUIStyle style = new GUIStyle(GUI.skin.box);
+        style.fontSize = 15;
+        style.fontStyle = FontStyle.Bold;
+        style.alignment = TextAnchor.MiddleCenter;
+        style.normal.textColor = promptColor;
+        GUI.Box(new Rect(Screen.width - 340f, 20f, 320f, 42f), status, style);
+    }
+
+    /// <summary>
+    /// 在有效时间内绘制最近一次操作的提示文字。
+    /// </summary>
+    private void DrawFeedback()
+    {
+        if (string.IsNullOrEmpty(feedbackMessage) || Time.realtimeSinceStartup >= feedbackUntil) return;
+        GUIStyle style = new GUIStyle(GUI.skin.box);
+        style.fontSize = 18;
+        style.fontStyle = FontStyle.Bold;
+        style.alignment = TextAnchor.MiddleCenter;
+        style.normal.textColor = Color.white;
+        GUI.Box(new Rect(Screen.width / 2f - 300f, 105f, 600f, 52f), feedbackMessage, style);
+    }
+
+    /// <summary>
+    /// 绘制物品领取时从节点出发的短暂收集动画。
+    /// </summary>
+    private void DrawCollectionAnimation()
+    {
+        if (collectionAnimationStart < 0f) return;
+        float progress = (Time.realtimeSinceStartup - collectionAnimationStart) /
+            Mathf.Max(0.1f, collectionAnimationDuration);
+        if (progress >= 1f)
+        {
+            collectionAnimationStart = -1f;
+            return;
+        }
+        Vector2 destination = new Vector2(Screen.width - 120f, 75f);
+        Vector2 position = Vector2.Lerp(collectionAnimationOrigin, destination,
+            Mathf.SmoothStep(0f, 1f, progress));
+        GUIStyle style = new GUIStyle(GUI.skin.box);
+        style.fontSize = 28;
+        style.alignment = TextAnchor.MiddleCenter;
+        GUI.color = promptColor;
+        GUI.Box(new Rect(position.x - 30f, position.y - 30f, 60f, 60f), collectionAnimationIcon, style);
+        GUI.color = Color.white;
+    }
+
+    /// <summary>
+    /// 生成不依赖外部音频文件的确认提示音。
+    /// </summary>
+    private AudioClip CreateConfirmationChime()
+    {
+        const int sampleRate = 22050;
+        const float seconds = 0.22f;
+        int sampleCount = Mathf.CeilToInt(sampleRate * seconds);
+        float[] samples = new float[sampleCount];
+        for (int i = 0; i < sampleCount; i++)
+        {
+            float t = (float)i / sampleRate;
+            float envelope = Mathf.Sin(Mathf.PI * i / sampleCount);
+            samples[i] = Mathf.Sin(2f * Mathf.PI * 660f * t) * envelope * 0.12f;
+        }
+        AudioClip clip = AudioClip.Create("Sky confirmation chime", sampleCount, 1, sampleRate, false);
+        clip.SetData(samples, 0);
+        return clip;
+    }
+
+    /// <summary>
+    /// 播放已生成的领取或装备确认音效。
+    /// </summary>
+    private void PlayConfirmationChime()
+    {
+        if (feedbackAudio != null && feedbackClip != null)
+            feedbackAudio.PlayOneShot(feedbackClip);
+    }
+
     // =====================================================
     // SCREEN POSITION
     // =====================================================
 
+    /// <summary>
+    /// 把节点的设计坐标换算为当前屏幕上的实际位置。
+    /// </summary>
     Vector2 GetScreenPosition(
         Vector2 offset)
     {
@@ -2044,6 +2311,9 @@ public class AncestorExchangeTree : MonoBehaviour
     // DRAW LINE
     // =====================================================
 
+    /// <summary>
+    /// 使用 GUI 绘制两个节点之间的连接线段。
+    /// </summary>
     void DrawLine(
         Vector2 start,
         Vector2 end,

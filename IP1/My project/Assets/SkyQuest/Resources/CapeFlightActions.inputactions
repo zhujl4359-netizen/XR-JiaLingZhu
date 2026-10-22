@@ -1,0 +1,23 @@
+{
+    "version": 1,
+    "name": "CapeFlightActions",
+    "maps": [
+        {
+            "name": "Cape Flight",
+            "id": "a1c8db51-1ea4-485b-b663-b619846278e1",
+            "actions": [
+                { "name": "Boost", "type": "Button", "id": "42640411-8b6f-46bd-9c2c-07945f8df269", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+                { "name": "Move", "type": "Value", "id": "a164e3fa-0f58-418d-8c38-92a647220297", "expectedControlType": "Vector2", "processors": "", "interactions": "", "initialStateCheck": true },
+                { "name": "Snap Turn", "type": "Value", "id": "eb1d025b-fbea-4ba1-bf1b-471321b8077b", "expectedControlType": "Vector2", "processors": "", "interactions": "", "initialStateCheck": true },
+                { "name": "Safe Stop", "type": "Button", "id": "faef222b-15b6-443e-a8e2-e41dc6ed5ab9", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false }
+            ],
+            "bindings": [
+                { "name": "", "id": "65489789-e167-4580-8d26-44220f22290a", "path": "<XRController>{RightHand}/{PrimaryButton}", "interactions": "", "processors": "", "groups": "", "action": "Boost", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "89f1f39b-8358-4862-b12e-0e7bd34ca217", "path": "<XRController>{LeftHand}/{Primary2DAxis}", "interactions": "", "processors": "", "groups": "", "action": "Move", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "6ce13156-c2a1-461d-9c73-899ac37ab1e2", "path": "<XRController>{RightHand}/{Primary2DAxis}", "interactions": "", "processors": "", "groups": "", "action": "Snap Turn", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "48a7831c-f1b8-4d79-ace4-574536728c48", "path": "<XRController>{RightHand}/{Primary2DAxisClick}", "interactions": "", "processors": "", "groups": "", "action": "Safe Stop", "isComposite": false, "isPartOfComposite": false }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}

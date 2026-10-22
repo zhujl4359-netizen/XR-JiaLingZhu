@@ -1,0 +1,17 @@
+Cape flight editor validation — 2026-10-22 12:28:52Z
+PASS OpenXR Input Actions asset and map import
+PASS Boost and steering actions exist
+PASS Saved VR test scene exists
+PASS Initial energy is 15
+PASS Ground takeoff spends exactly 1
+PASS Cooldown rejects repeat without charge
+PASS Wall contact does not cause landing
+PASS Upward contact does not cancel takeoff
+PASS Downward ground contact enters landing
+PASS Stable support enters grounded
+PASS Zero energy cannot boost
+PASS Overlapping zones use highest rate only
+PASS Leaving fast zone leaves slow contribution
+PASS Leaving all zones stops recharge
+PASS Recharge clamps to maximum
+RESULT: PASS — editor checks only; Quest controller/headset checks remain manual.

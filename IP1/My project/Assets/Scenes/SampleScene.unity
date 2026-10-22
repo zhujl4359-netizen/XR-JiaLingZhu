@@ -847,7 +847,7 @@ Transform:
   m_GameObject: {fileID: 792447349}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -28.366474, y: -16.361439, z: -52.3}
+  m_LocalPosition: {x: 0, y: 0, z: 2}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1412,19 +1412,19 @@ MonoBehaviour:
   playerCamera: {fileID: 1917114643}
   throwForce: 20
   upwardForce: 2
-  maxAimDistance: 45
+  maxAimDistance: 8
   aimAngle: 12
-  fallbackAimDistance: 25
+  fallbackAimDistance: 8
   groundLayer:
     serializedVersion: 2
     m_Bits: 1
   trajectoryLine: {fileID: 0}
-  trajectoryPoints: 80
-  trajectoryWidth: 0.18
-  targetCircleRadius: 2
+  trajectoryPoints: 48
+  trajectoryWidth: 0.035
+  targetCircleRadius: 1.85
   targetCircleSegments: 60
-  targetCircleHeight: 0.08
-  targetCircleWidth: 0.2
+  targetCircleHeight: 0.018
+  targetCircleWidth: 0.075
 --- !u!1 &1380076483
 GameObject:
   m_ObjectHideFlags: 0
@@ -1791,7 +1791,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1787543810}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0f56ae2953ec040a48aa42ca95d01c1b, type: 3}
   m_Name: 

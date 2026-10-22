@@ -1,11 +1,17 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>
+/// 桌面版角色移动：W/S 前后行走，A/D 原地转向。
+/// </summary>
 public class PlayerMovement : MonoBehaviour
 {
     public float moveSpeed = 5f;
     public float rotateSpeed = 120f;
 
+    /// <summary>
+    /// 每帧读取 W/S 和 A/D，根据帧间时间推进角色并在原地旋转。
+    /// </summary>
     void Update()
     {
         if (Keyboard.current == null)

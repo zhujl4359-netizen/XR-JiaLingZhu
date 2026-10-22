@@ -1,6 +1,9 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>
+/// 桌面版鹿头投掷：Q 直接抛出，按住 P 预览低弧线和落点后松开发射。
+/// </summary>
 public class MaskThrowController : MonoBehaviour
 {
     // =====================================================
@@ -29,14 +32,14 @@ public class MaskThrowController : MonoBehaviour
     [Header("P：瞄准投掷")]
 
     [Tooltip("最大瞄准距离")]
-    public float maxAimDistance = 35f;
+    public float maxAimDistance = 8f;
 
     [Tooltip("抛物线角度。越小越平、越远")]
     [Range(5f, 30f)]
     public float aimAngle = 10f;
 
     [Tooltip("如果没有检测到地面，使用这个距离")]
-    public float fallbackAimDistance = 25f;
+    public float fallbackAimDistance = 8f;
 
 
     // =====================================================
@@ -57,10 +60,10 @@ public class MaskThrowController : MonoBehaviour
     public LineRenderer trajectoryLine;
 
     [Tooltip("抛物线分段")]
-    public int trajectoryPoints = 100;
+    public int trajectoryPoints = 48;
 
     [Tooltip("抛物线粗细")]
-    public float trajectoryWidth = 0.22f;
+    public float trajectoryWidth = 0.035f;
 
 
     // =====================================================
@@ -69,13 +72,13 @@ public class MaskThrowController : MonoBehaviour
 
     [Header("落点圆圈")]
 
-    public float targetCircleRadius = 1.3f;
+    public float targetCircleRadius = 1.65f;
 
     public int targetCircleSegments = 60;
 
-    public float targetCircleHeight = 0.08f;
+    public float targetCircleHeight = 0.018f;
 
-    public float targetCircleWidth = 0.18f;
+    public float targetCircleWidth = 0.075f;
 
 
     // =====================================================
@@ -92,6 +95,8 @@ public class MaskThrowController : MonoBehaviour
 
     private Vector3 currentTarget;
 
+    private Vector3 currentTargetNormal = Vector3.up;
+
     private Vector3 currentLaunchVelocity;
 
     private float currentFlightTime;
@@ -101,8 +106,13 @@ public class MaskThrowController : MonoBehaviour
     // Start
     // =====================================================
 
+    /// <summary>
+    /// 规范化旧场景中的瞄准参数，取得刚体/摄像机并准备轨迹和落点预览。
+    /// </summary>
     void Start()
     {
+        ApplyUnifiedAimStyle();
+
         rb = GetComponent<Rigidbody>();
 
         if (rb == null)
@@ -136,11 +146,32 @@ public class MaskThrowController : MonoBehaviour
         );
     }
 
+    // Scene files made before the unified throw preview contain serialized
+    // values as long as 45 metres.  Enforce the compact style at runtime too,
+    // so old scenes and newly spawned throwables behave identically.
+    /// <summary>
+    /// 把瞄准距离、角度及预览尺寸约束到当前版本统一的范围。
+    /// </summary>
+    void ApplyUnifiedAimStyle()
+    {
+        maxAimDistance = Mathf.Clamp(maxAimDistance, 5f, 8f);
+        fallbackAimDistance = Mathf.Clamp(fallbackAimDistance, 5f, 8f);
+        aimAngle = Mathf.Clamp(aimAngle, 9f, 16f);
+        trajectoryPoints = Mathf.Clamp(trajectoryPoints, 36, 52);
+        trajectoryWidth = Mathf.Clamp(trajectoryWidth, .028f, .04f);
+        targetCircleRadius = Mathf.Max(targetCircleRadius, 1.65f);
+        targetCircleHeight = .018f;
+        targetCircleWidth = Mathf.Clamp(targetCircleWidth, .06f, .085f);
+    }
+
 
     // =====================================================
     // Update
     // =====================================================
 
+    /// <summary>
+    /// 处理 P 的按下、持续瞄准和松开发射，以及 Q 的直接投掷。
+    /// </summary>
     void Update()
     {
         if (Keyboard.current == null)
@@ -237,6 +268,9 @@ public class MaskThrowController : MonoBehaviour
     // 判断是否拿着鹿头
     // =====================================================
 
+    /// <summary>
+    /// 通过父节点或刚体静态状态判断鹿头是否仍被角色拿着。
+    /// </summary>
     bool IsHoldingMask()
     {
         if (rb == null)
@@ -274,6 +308,9 @@ public class MaskThrowController : MonoBehaviour
     // P：开始瞄准
     // =====================================================
 
+    /// <summary>
+    /// 进入瞄准状态，显示预览对象并立即计算第一帧轨迹。
+    /// </summary>
     void StartAim()
     {
         Debug.Log(
@@ -322,6 +359,9 @@ public class MaskThrowController : MonoBehaviour
     // P：持续更新瞄准
     // =====================================================
 
+    /// <summary>
+    /// 从屏幕中心找落点，校正到真实地面并计算低弧线或备用轨迹。
+    /// </summary>
     void UpdateAim()
     {
         if (!isAiming)
@@ -452,6 +492,21 @@ public class MaskThrowController : MonoBehaviour
             );
         }
 
+        // Always resolve the marker against a real upward-facing surface.
+        // This prevents the circle from floating at the held object's height
+        // or being drawn vertically on a wall.
+        if (TryFindGroundBelow(currentTarget, out Vector3 groundedPoint, out Vector3 groundedNormal))
+        {
+            currentTarget = groundedPoint;
+            currentTargetNormal = groundedNormal;
+        }
+        else
+        {
+            hasValidTarget = false;
+            HideAimVisuals();
+            return;
+        }
+
 
         // =================================================
         // 计算低弧线
@@ -532,6 +587,9 @@ public class MaskThrowController : MonoBehaviour
     // ★ 备用弹道
     // =====================================================
 
+    /// <summary>
+    /// 低弧线求解失败时按目标距离估算飞行时间和可用的发射速度。
+    /// </summary>
     void CreateFallbackTrajectory()
     {
         Vector3 start =
@@ -565,25 +623,12 @@ public class MaskThrowController : MonoBehaviour
         // ★ 强制一个稳定的低弧线速度
         // -------------------------------------------------
 
-        float horizontalSpeed =
-            18f;
-
-
-        float verticalSpeed =
-            6f;
-
-
-        currentLaunchVelocity =
-            direction *
-            horizontalSpeed
-            +
-            Vector3.up *
-            verticalSpeed;
-
-
-        currentFlightTime =
-            fallbackAimDistance /
-            horizontalSpeed;
+        float distance = Vector3.ProjectOnPlane(currentTarget - start, Vector3.up).magnitude;
+        currentFlightTime = Mathf.Clamp(distance / 8f, .55f, 1.25f);
+        Vector3 displacement = currentTarget - start;
+        Vector3 horizontalDisplacement = Vector3.ProjectOnPlane(displacement, Vector3.up);
+        float verticalSpeed = (displacement.y - .5f * Physics.gravity.y * currentFlightTime * currentFlightTime) / currentFlightTime;
+        currentLaunchVelocity = horizontalDisplacement / currentFlightTime + Vector3.up * verticalSpeed;
 
 
         hasValidTarget =
@@ -612,6 +657,9 @@ public class MaskThrowController : MonoBehaviour
     // Q：普通投掷
     // =====================================================
 
+    /// <summary>
+    /// Q 键直接投掷：脱离手部、恢复物理，赋予镜头朝向速度。
+    /// </summary>
     void ThrowForward()
     {
         if (rb == null)
@@ -680,6 +728,9 @@ public class MaskThrowController : MonoBehaviour
     // P：瞄准投掷
     // =====================================================
 
+    /// <summary>
+    /// P 键瞄准投掷：使用预览阶段保存的发射速度，确保实际轨迹匹配预览。
+    /// </summary>
     void ThrowToTarget()
     {
         if (rb == null)
@@ -767,6 +818,9 @@ public class MaskThrowController : MonoBehaviour
     // 计算低抛速度
     // =====================================================
 
+    /// <summary>
+    /// 根据起点、落点、重力和设定仰角求初速度与飞行时间；不可达时返回 false。
+    /// </summary>
     bool CalculateLowArcVelocity(
         Vector3 start,
         Vector3 target,
@@ -941,6 +995,9 @@ public class MaskThrowController : MonoBehaviour
     // 绘制抛物线
     // =====================================================
 
+    /// <summary>
+    /// 用计算出的初速度逐点采样抛物线并更新 LineRenderer。
+    /// </summary>
     void DrawTrajectory(
         Vector3 start,
         Vector3 velocity,
@@ -1002,6 +1059,9 @@ public class MaskThrowController : MonoBehaviour
     // 创建抛物线
     // =====================================================
 
+    /// <summary>
+    /// 创建或配置用于显示预测飞行路径的 LineRenderer。
+    /// </summary>
     void CreateTrajectory()
     {
         GameObject lineObject =
@@ -1054,19 +1114,18 @@ public class MaskThrowController : MonoBehaviour
             new Material(shader);
 
 
-        // -------------------------------------------------
-        // ★ 青色
-        // -------------------------------------------------
+        // Match the warm, readable trajectory used by all exchanged props.
+        Color trajectoryColor = new Color(1f, .9f, .55f, 1f);
 
         material.color =
-            Color.cyan;
+            trajectoryColor;
 
 
         if (material.HasProperty("_BaseColor"))
         {
             material.SetColor(
                 "_BaseColor",
-                Color.cyan
+                trajectoryColor
             );
         }
 
@@ -1076,10 +1135,10 @@ public class MaskThrowController : MonoBehaviour
 
 
         trajectoryLine.startColor =
-            Color.cyan;
+            trajectoryColor;
 
         trajectoryLine.endColor =
-            Color.cyan;
+            trajectoryColor;
 
 
         // -------------------------------------------------
@@ -1121,6 +1180,9 @@ public class MaskThrowController : MonoBehaviour
     // 创建落点圆
     // =====================================================
 
+    /// <summary>
+    /// 创建目标落点圆环及其渲染组件。
+    /// </summary>
     void CreateTargetCircle()
     {
         targetCircle =
@@ -1221,6 +1283,43 @@ public class MaskThrowController : MonoBehaviour
     // 更新落点圆
     // =====================================================
 
+    /// <summary>
+    /// 先尝试指定地面层；找不到时回退到全部层，以取得有效的水平落点。
+    /// </summary>
+    bool TryFindGroundBelow(Vector3 candidate, out Vector3 point, out Vector3 normal)
+    {
+        int preferredMask = groundLayer.value == 0 ? ~0 : groundLayer.value;
+        if (TryFindGroundBelow(candidate, preferredMask, out point, out normal)) return true;
+        if (preferredMask != ~0 && TryFindGroundBelow(candidate, ~0, out point, out normal)) return true;
+        point = candidate;
+        normal = Vector3.up;
+        return false;
+    }
+
+    /// <summary>
+    /// 向候选点下方发射射线，排除自身和陡峭表面，选最近的有效地面。
+    /// </summary>
+    bool TryFindGroundBelow(Vector3 candidate, int mask, out Vector3 point, out Vector3 normal)
+    {
+        point = candidate;
+        normal = Vector3.up;
+        float closest = float.PositiveInfinity;
+        Vector3 origin = candidate + Vector3.up * 3f;
+        foreach (RaycastHit hit in Physics.RaycastAll(origin, Vector3.down, 12f, mask, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.collider == null || hit.normal.y < .45f) continue;
+            if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
+            if (hit.distance >= closest) continue;
+            closest = hit.distance;
+            point = hit.point;
+            normal = hit.normal.normalized;
+        }
+        return closest < float.PositiveInfinity;
+    }
+
+    /// <summary>
+    /// 按照地面法线建立圆环平面，使落点提示贴合坡面。
+    /// </summary>
     void UpdateTargetCircle(
         Vector3 target)
     {
@@ -1239,6 +1338,13 @@ public class MaskThrowController : MonoBehaviour
             >();
 
 
+        Vector3 up = currentTargetNormal.sqrMagnitude > .01f ? currentTargetNormal.normalized : Vector3.up;
+        Vector3 tangent = Vector3.Cross(up, Vector3.forward);
+        if (tangent.sqrMagnitude < .01f) tangent = Vector3.Cross(up, Vector3.right);
+        tangent.Normalize();
+        Vector3 bitangent = Vector3.Cross(up, tangent).normalized;
+        Vector3 center = target + up * targetCircleHeight;
+
         for (
             int i = 0;
             i < targetCircleSegments;
@@ -1253,26 +1359,10 @@ public class MaskThrowController : MonoBehaviour
                 targetCircleSegments;
 
 
-            float x =
-                Mathf.Cos(angle)
-                *
-                targetCircleRadius;
-
-
-            float z =
-                Mathf.Sin(angle)
-                *
-                targetCircleRadius;
-
-
             Vector3 point =
-                target
-                +
-                new Vector3(
-                    x,
-                    targetCircleHeight,
-                    z
-                );
+                center
+                + tangent * Mathf.Cos(angle) * targetCircleRadius
+                + bitangent * Mathf.Sin(angle) * targetCircleRadius;
 
 
             line.SetPosition(
@@ -1287,6 +1377,9 @@ public class MaskThrowController : MonoBehaviour
     // 隐藏抛物线
     // =====================================================
 
+    /// <summary>
+    /// 关闭预测弹道线的显示。
+    /// </summary>
     void HideTrajectory()
     {
         if (trajectoryLine != null)
@@ -1301,6 +1394,9 @@ public class MaskThrowController : MonoBehaviour
     // 停止瞄准
     // =====================================================
 
+    /// <summary>
+    /// 退出瞄准、清除有效目标并隐藏全部预览。
+    /// </summary>
     void StopAim()
     {
         isAiming =
@@ -1317,6 +1413,9 @@ public class MaskThrowController : MonoBehaviour
     // 隐藏所有瞄准视觉
     // =====================================================
 
+    /// <summary>
+    /// 同时隐藏抛物线与落点圆环。
+    /// </summary>
     void HideAimVisuals()
     {
         if (trajectoryLine != null)
@@ -1339,6 +1438,9 @@ public class MaskThrowController : MonoBehaviour
     // 通知 MaskInteraction
     // =====================================================
 
+    /// <summary>
+    /// 通知拾取脚本物品已离手，由它恢复未持有状态。
+    /// </summary>
     void NotifyMaskDropped()
     {
         MaskInteraction mask =

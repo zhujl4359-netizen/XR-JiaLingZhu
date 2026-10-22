@@ -1,0 +1,18 @@
+ANCESTOR MAGIC EXCHANGE
+
+Desktop keyboard
+- Walk close to any memorial stone. The ancestor is summoned automatically inside the approach radius and returns when you leave.
+- The ancestor's English name and a star interaction icon appear above the character.
+- Press F near the ancestor, or click the star icon, to open the exchange tree on the right side.
+- The tree unlocks from the bottom upward. Each node shows its Magic icon, name, cost, and locked/done state.
+- Starting candle balance: 100. The balance is shown at the upper left of the exchange panel and decreases after every successful exchange.
+- Select a node with 1-5, then press Enter to exchange. The previous node must be completed first.
+- Each exchanged Magic icon creates a colored/material Magic cube and places it in the character's hand.
+- Press P to release the held cube. Press P again near a cube to pick it up. Press Q to throw the held cube in the current camera direction.
+- Press F again to close the exchange tree.
+
+Quest 3S
+- Approach a memorial stone to summon the ancestor; leave the radius to dismiss it.
+- Point the right controller at the star icon and press the right trigger to open the tree.
+- Point at a node and hold the right trigger to exchange. Use the left X button to close.
+- The tree and candle balance use the same bottom-to-top progression. Magic cubes are spawned beside the ancestor for controller interaction.
